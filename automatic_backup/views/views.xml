@@ -1,0 +1,87 @@
+<odoo>
+  <data>
+      <record id="backup_configuration_view_tree" model="ir.ui.view">
+        <field name="name">automatic.backup.configuration.view.tree</field>
+        <field name="model">automatic_backup.configuration</field>
+        <field name="arch" type="xml">
+            <tree string="Backup Configuration">
+                <field name="name"/>
+                <field name="backup_type"/>
+                <field name="active"/>
+            </tree>
+        </field>
+      </record>
+
+      <record id="backup_configuration_view_form" model="ir.ui.view">
+        <field name="name">automatic.backup.configuration.view.form</field>
+        <field name="model">automatic_backup.configuration</field>
+        <field name="arch" type="xml">
+            <form string="Backup Configuration">
+                <header>
+                    <button type="object" string="Backup" name="btn_action_backup"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="success_mail"/>
+                            <field name="error_mail"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group>
+                            <field name="backup_type"/>
+                            <field name="upload_path"/>
+                            <field name="show_s3" invisible="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group attrs="{'invisible': [('show_s3','=',False)]}">
+                            <field name="s3_access_key_id"/>
+                            <field name="s3_secret_access_key"/>
+                            <field name="s3_bucket_name"/>
+                        </group>
+                    </group>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers" groups="base.group_user"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+            </form>
+        </field>
+      </record>
+
+    <record id="backup_configuration_view_search" model="ir.ui.view">
+        <field name="name">automatic.backup.configuration.search</field>
+        <field name="model">automatic_backup.configuration</field>
+        <field name="arch" type="xml">
+            <search string="Backup Configuration">
+                <filter name="active" string="Active" domain="[('active', '=', True)]"/>
+                <filter name="unactive" string="Inactive" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="backup_configuration_action" model="ir.actions.act_window">
+        <field name="name">Backup Configuration</field>
+        <field name="res_model">automatic_backup.configuration</field>
+        <field name="view_type">form</field>
+        <field name='view_mode'>tree,form</field>
+        <field name="view_id" ref="backup_configuration_view_tree"/>
+        <field name="context">{}</field>
+        <field name="search_view_id" ref="backup_configuration_view_search"/>
+    </record>
+
+    <menuitem id="main_menu_backup" name="Backup" parent="base.menu_custom"/>
+    <menuitem id="backup_configuration" name="Backup Configuration"
+              action="backup_configuration_action"
+              parent="main_menu_backup" sequence="1"/>
+  </data>
+</odoo>
