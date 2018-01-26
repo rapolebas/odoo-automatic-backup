@@ -34,7 +34,11 @@
                             <field name="error_mail"/>
                         </group>
                     </group>
-
+                    <group>
+                            <field name="last_backup"/>
+                            <field name="last_path"/>
+                            <field name="last_message"/>
+                    </group>
                     <group>
                         <group>
                             <field name="backup_type"/>
@@ -42,13 +46,34 @@
                             <field name="show_s3" invisible="1"/>
                         </group>
                     </group>
-                    <group>
-                        <group attrs="{'invisible': [('show_s3','=',False)]}">
-                            <field name="s3_access_key_id"/>
-                            <field name="s3_secret_access_key"/>
-                            <field name="s3_bucket_name"/>
+                    <notebook>
+                        <page string="Config">
+                        <group>
+                            <group attrs="{'invisible': [('show_s3','=',False)]}">
+                                <field name="s3_access_key_id"/>
+                                <field name="s3_secret_access_key"/>
+                                <field name="s3_bucket_name"/>
+                            </group>
                         </group>
-                    </group>
+                        </page>
+                        <page string="Information">
+                            <group attrs="{'invisible': [('show_s3','=',False)]}">
+                                <h2 colspan="2">IAM Policy</h2>
+                                <p>
+                                    {<br/>
+                                        "Version": "2012-10-17",<br/>
+                                        "Statement": [{<br/>
+                                                "Sid": <b>"WhatEverUWant"</b>,<br/>
+                                                "Effect": "Allow",<br/>
+                                                "Action": "s3:PutObject",<br/>
+                                    "Resource": "arn:aws:s3:::<b>bucketname</b>/*"<br/>
+                                            }]<br/>
+                                    }<br/>
+                                </p>
+                            </group>
+                        </page>
+                    </notebook>
+
                 </sheet>
                 <div class="oe_chatter">
                     <field name="message_follower_ids" widget="mail_followers" groups="base.group_user"/>
@@ -83,5 +108,39 @@
     <menuitem id="backup_configuration" name="Backup Configuration"
               action="backup_configuration_action"
               parent="main_menu_backup" sequence="1"/>
+
+      <record id="backup_configuration_success_template" model="mail.template">
+          <field name="name">Backup Success Email-Template</field>
+          <field name="email_from">${object.company_id and object.company_id.email or ''}</field>
+          <field name="subject">Succesful Backup: ${object.name}</field>
+          <field name="email_to">${object.success_mail.login}</field>
+          <field name="lang">${object.success_mail.lang}</field>
+          <field name="model_id" ref="automatic_backup.model_automatic_backup_configuration"/>
+          <field name="auto_delete" eval="True"/>
+          <field name="body_html">
+                <![CDATA[
+              <p>Dear ${object.success_mail.name},<br/><br/>
+              ${object.last_message}
+              </p>
+            ]]>
+          </field>
+       </record>
+
+       <record id="backup_configuration_error_template" model="mail.template">
+          <field name="name">Backup Success Email-Template</field>
+          <field name="email_from">${object.company_id and object.company_id.email or ''}</field>
+          <field name="subject">Succesful Backup: ${object.name}</field>
+          <field name="email_to">${object.success_mail.login}</field>
+          <field name="lang">${object.success_mail.lang}</field>
+          <field name="model_id" ref="automatic_backup.model_automatic_backup_configuration"/>
+          <field name="auto_delete" eval="True"/>
+          <field name="body_html">
+                <![CDATA[
+              <p>Dear ${object.success_mail.name},<br/><br/>
+              ${object.last_message}
+              </p>
+            ]]>
+          </field>
+       </record>
   </data>
 </odoo>
