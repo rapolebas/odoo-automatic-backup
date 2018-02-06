@@ -1,7 +1,7 @@
 Odoo 11 - Automatic Backup to whatever
 ===============
 
-![11.0 success](https://img.shields.io/badge/11.0-success-brightgreen.svg)
+![11.0 success](https://img.shields.io/teamcity/http/teamcity.jetbrains.com/s/bt345.svg)
 
 With this module you can easily make a schedule to backup your odoo database.
 
