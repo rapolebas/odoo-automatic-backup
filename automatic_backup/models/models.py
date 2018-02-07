@@ -37,8 +37,7 @@ class Configuration(models.Model):
                                            default='weeks', required=1)
     schedule_number = fields.Integer(min=1, default=1, required=1)
 
-    next_backup_time = fields.Datetime(default=lambda self: self._default_next_backup_time(), store=True, required=1,
-                                       help="Next Backup-Time with your UTC")
+    next_backup_time = fields.Datetime(store=0, required=1, readonly=1, compute='_compute_next_backup_time')
     success_mail = fields.Many2one('res.users', ondelete='set null')
     error_mail = fields.Many2one('res.users', ondelete='set null')
 
@@ -74,14 +73,17 @@ class Configuration(models.Model):
     def create(self, vals):
         vals = self.check_upload_path(vals)
         model_id = self.env['ir.model'].search([('model','=', self._name)])
+        nextbackuptime = self.next_backup_time
+        if not nextbackuptime:
+            nextbackuptime = datetime.datetime.today() + datetime.timedelta(days=1)
         cron_id = self.env['ir.cron'].create({
-            'name': 'Backup: '+ vals['name'],
+            'name': 'Backup: ' + vals['name'],
             'model_id': model_id.id,
             'state': 'code',
             'user_id': 1,
             'interval_number': vals['schedule_number'],
             'interval_type': vals['schedule_frequently'],
-            'nextcall': vals['next_backup_time'],
+            'nextcall': nextbackuptime,
             'priority': 100,
             'numbercall': -1,
             'active': vals['active'],
@@ -98,12 +100,12 @@ class Configuration(models.Model):
         result = super(Configuration, self).write(vals)
         try:
             if self.cron_id:
-                self.cron_id.write({
-                    'interval_number': self.schedule_number,
-                    'interval_type': self.schedule_frequently,
-                    'nextcall': self.next_backup_time,
-                    'active': self.active
-                })
+                if 'interval_number' in vals:
+                    self.cron_id.write({'interval_number': self.schedule_number,})
+                if 'interval_type' in vals:
+                    self.cron_id.write({'interval_type': self.schedule_frequently,})
+                if 'active' in vals:
+                    self.cron_id.write({'active': self.active})
                 if 'name' in vals:
                     self.cron_id.write({'name': 'Backup: '+self.name})
         except:
@@ -121,11 +123,17 @@ class Configuration(models.Model):
     def check_upload_path(self, vals):
         if 'upload_path' in vals:
             vals['upload_path'] = vals['upload_path'].replace('\\', '/')
-            vals['upload_path'] = ''.join(vals['upload_path'][i] for i in range(len(vals['upload_path'])-1) if (i != 0 and vals['upload_path'][i-1] != vals['upload_path'][i]) or vals['upload_path'][i] != '/')
-            if '/' != vals['upload_path'][0]:
-                vals['upload_path'] = '/' + vals['upload_path']
-            if '/' != vals['upload_path'][-1]:
-                vals['upload_path'] = vals['upload_path'] + '/'
+            vals['upload_path'] = ''.join(
+                vals['upload_path'][i] for i in range(len(vals['upload_path'])-1)
+                if (i != 0 and vals['upload_path'][i-1] != vals['upload_path'][i]) or vals['upload_path'][i] != '/' or (vals['upload_path'][i] == '/' and i == 0)
+            )
+            if len(vals['upload_path']):
+                if '/' != vals['upload_path'][0]:
+                    vals['upload_path'] = '/' + vals['upload_path']
+                if '/' != vals['upload_path'][-1]:
+                    vals['upload_path'] = vals['upload_path'] + '/'
+            else:
+                vals['upload_path'] = '/'
         return vals
 
     def set_show_s3(self):
@@ -146,8 +154,9 @@ class Configuration(models.Model):
     def set_show_secret_key(self):
         self.show_secret_key = (self.backup_type == BackupTypes.s3.value[0])
 
-    def _default_next_backup_time(self):
-        return datetime.datetime.now() + datetime.timedelta(days=1)
+    def _compute_next_backup_time(self):
+        if self.cron_id:
+            self.next_backup_time = self.cron_id.nextcall
 
     @api.onchange('backup_type')
     def onchange_backup_type(self):
@@ -222,9 +231,20 @@ class Configuration(models.Model):
 
     def _backup_on_owncloud(self):
         oc = owncloud.Client(self.cloud_url)
-        oc.login(self.cloud_username, self.cloud_password)
+        try:
+            oc.login(self.cloud_username, self.cloud_password)
+        except:
+            raise exceptions.ValidationError("ownCloud: Check your Creds!")
         path, content = self.get_path_and_content()
-        oc.put_file_contents(path, content.read())
+        try:
+            oc.put_file_contents(path, content.read())
+        except Exception as err:
+            if err.status_code == 404:
+                raise exceptions.ValidationError("Folder not found!")
+            raise err
+        message = ("ownCloud: No Error during upload. You can find the backup under {0}".format(path))
+        self.set_last_fields(message, path=path)
+        self.message_post(message)
 
     def get_path_and_content(self):
         filename, content = self.get_backup()
