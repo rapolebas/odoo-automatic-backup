@@ -18,7 +18,10 @@
         <field name="arch" type="xml">
             <form string="Backup Configuration">
                 <header>
-                    <button type="object" string="Backup" name="btn_action_backup"/>
+                    <button type="object" string="Backup" name="btn_action_backup" class="btn btn-primary" attrs="{'invisible': [('state','=','disabled')]}"/>
+                    <button string="deactivate" type="object" name="deactivate_progressbar" attrs="{'invisible': [('state','=','disabled')]}"/>
+                    <button string="activate" type="object" name="activate_progressbar" attrs="{'invisible': [('state','=','active')]}"/>
+                    <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -27,7 +30,6 @@
                     </div>
                     <group>
                         <group>
-                            <field name="active"/>
                             <field name="cron_id" readonly="1"/>
                         </group>
                         <group>

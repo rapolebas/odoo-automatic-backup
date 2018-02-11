@@ -8,8 +8,8 @@ With this module you can easily make a schedule to backup your odoo database.
 Supported Cloud-Storages:
  * Amazon WebService - S3
  * Dropbox
- * Google Drive
  * ownCloud/nextCloud
+ * SFTP
  
 Also see: 
 
