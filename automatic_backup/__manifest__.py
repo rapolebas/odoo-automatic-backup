@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 {
-    'name': "automatic_backup",
+    'name': "automatic_backup_to_whatever",
 
     'summary': """
         Automatic Backup with Automatic Action into S3, Dropbox, SFTP or ownCloud.
