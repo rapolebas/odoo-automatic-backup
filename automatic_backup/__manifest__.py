@@ -2,30 +2,28 @@
 {
     'name': "automatic_backup",
 
-    'summary': """""",
+    'summary': """
+        Automatic Backup with Automatic Action into S3, Dropbox, SFTP or ownCloud.
+    """,
 
     'description': """""",
 
-    'author': "My Company",
-    'website': "http://www.yourcompany.com",
+    'author': "Andreas Wyrobek",
+    'website': "https://www.cytex.cc",
 
-    # Categories can be used to filter modules in modules listing
-    # Check https://github.com/odoo/odoo/blob/master/odoo/addons/base/module/module_data.xml
-    # for the full list
-    'category': 'Uncategorized',
+    'category': 'Administration',
     'version': '0.1',
 
-    # any module necessary for this one to work correctly
     'depends': ['base', 'mail'],
 
-    # always loaded
     'data': [
         # 'security/ir.model.access.csv',
         'views/views.xml',
         'views/templates.xml',
     ],
-    # only loaded in demonstration mode
-    'demo': [
-        'demo/demo.xml',
-    ],
+    'demo': [],
+
+    'installable': True,
+    'application': True,
+    'auto_install': False,
 }
