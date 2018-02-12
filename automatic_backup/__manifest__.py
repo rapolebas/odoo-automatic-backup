@@ -13,6 +13,8 @@
 
     'category': 'Administration',
     'version': '0.1',
+	
+	'images': ['images/main_screenshot.png'],
 
     'depends': ['base', 'mail'],
 
