@@ -5,7 +5,7 @@ from enum import Enum
 
 import boto3
 import botocore
-
+import pysftp
 import dropbox
 from dropbox import exceptions as dropbox_exceptions
 
@@ -15,11 +15,10 @@ import os
 import datetime
 
 
-
 class BackupTypes(Enum):
     s3 = ('s3', 'Amazon Web-Service S3')
     dropbox = ('dropbox', 'Dropbox')
-    owncloud = ('owncloud', 'OwnCloud')
+    owncloud = ('owncloud', 'ownCloud/nextCloud')
     sftp = ('sftp', 'SFTP')
 
 
@@ -27,22 +26,30 @@ class Configuration(models.Model):
     _name = 'automatic_backup.configuration'
     _inherit = ['mail.thread']
 
-    name = fields.Char(required=1)
-    active = fields.Boolean(default=0)
-    state = fields.Selection([('disabled', 'Disabled'),('active', 'Active')], default='disabled', readonly=1)
+    name = fields.Char('Name', required=1)
+    active = fields.Boolean('is Active', default=0)
+    state = fields.Selection([('disabled', 'Disabled'),('active', 'Active')],
+                             default='disabled', readonly=1)
 
-    schedule_frequently = fields.Selection(string='Every', selection=[('days', 'Days'), ('weeks', 'Weeks')],
+    schedule_frequently = fields.Selection(string='Every',
+                                           selection=[
+                                               ('days', 'Days'),
+                                               ('weeks', 'Weeks')
+                                           ],
                                            default='weeks', required=1)
-    schedule_number = fields.Integer(min=1, default=1, required=1)
+    schedule_number = fields.Integer('Schedule Number', min=1,
+                                     default=1, required=1)
 
-    next_backup_time = fields.Datetime(store=0, readonly=1, compute='_compute_next_backup_time')
+    next_backup_time = fields.Datetime('Next Backup Time', store=0, readonly=1,
+                                       compute='_compute_next_backup_time')
     success_mail = fields.Many2one('res.users', ondelete='set null')
     error_mail = fields.Many2one('res.users', ondelete='set null')
 
     cron_id = fields.Many2one('ir.cron', ondelete='cascade')
 
     backup_type = fields.Selection([
-        BackupTypes.s3.value, BackupTypes.dropbox.value, BackupTypes.owncloud.value, BackupTypes.sftp.value
+        BackupTypes.s3.value, BackupTypes.dropbox.value,
+        BackupTypes.owncloud.value, BackupTypes.sftp.value
     ], required=1)
     upload_path = fields.Char("Path to upload", required=True)
     last_backup = fields.Datetime(readonly=1)
@@ -52,15 +59,19 @@ class Configuration(models.Model):
     show_s3 = fields.Boolean(compute='set_show_s3', store=0)
     show_dropbox = fields.Boolean(compute='set_show_dropbox', store=0)
     show_owncloud = fields.Boolean(compute='set_show_owncloud', store=0)
+    show_sftp = fields.Boolean(compute='set_show_sftp', store=0)
 
     show_access_key = fields.Boolean(compute='set_show_access_key', store=0)
     show_secret_key = fields.Boolean(compute='set_show_secret_key', store=0)
+
+    show_login_cred = fields.Boolean(compute='set_show_login_cred', store=0)
 
     access_key_id = fields.Char("Access Key")
     secret_access_key = fields.Char("Secret Key")
     s3_bucket_name = fields.Char("BucketName")
 
     cloud_url = fields.Char('URL')
+    cloud_port = fields.Char('Port')
     cloud_username = fields.Char('Username')
     cloud_password = fields.Char('Password')
 
@@ -126,6 +137,9 @@ class Configuration(models.Model):
     def set_show_owncloud(self):
         self.show_owncloud = (self.backup_type == BackupTypes.owncloud.value[0])
 
+    def set_show_sftp(self):
+        self.show_sftp = (self.backup_type == BackupTypes.sftp.value[0])
+
     def set_show_access_key(self):
         self.show_access_key = (
             (self.backup_type == BackupTypes.s3.value[0])
@@ -134,6 +148,12 @@ class Configuration(models.Model):
 
     def set_show_secret_key(self):
         self.show_secret_key = (self.backup_type == BackupTypes.s3.value[0])
+
+    def set_show_login_cred(self):
+        self.show_login_cred = (
+            (self.backup_type == BackupTypes.owncloud.value[0])
+            or (self.backup_type == BackupTypes.sftp.value[0])
+        )
 
     def _compute_next_backup_time(self):
         if self.cron_id:
@@ -145,6 +165,9 @@ class Configuration(models.Model):
         self.set_show_access_key()
         self.set_show_secret_key()
         self.set_show_owncloud()
+        self.set_show_dropbox()
+        self.set_show_sftp()
+        self.set_show_login_cred()
 
     def action_backup(self, id):
         backup_ids = self.search([id])
@@ -172,7 +195,7 @@ class Configuration(models.Model):
     def send_email(self, success=True):
         if ((success and self.success_mail.id is not False) or (not success and self.error_mail.id is not False)):
             template_name = 'backup_configuration_success_template' if success else 'backup_configuration_error_template'
-            template = self.env.ref('automatic_backup.'+template_name)
+            template = self.env.ref('automatic_backup_to_whatever.'+template_name)
             self.env['mail.template'].browse(template.id).send_mail(self.id, force_send=True)
 
     def _backup_on_s3(self):
@@ -225,7 +248,20 @@ class Configuration(models.Model):
         self.message_post(message)
 
     def _backup_on_sftp(self):
-        pass
+        try:
+            port = int(self.cloud_port)
+        except:
+            raise exceptions.ValidationError("Port has to be between 1 and 65535")
+        else:
+            with pysftp.Connection(host=self.cloud_url,
+                                    username=self.cloud_username,
+                                    password=self.cloud_password,
+                                    port=port) as sftp:
+                path, content = self.get_path_and_content()
+                sftp.putfo(content, remotepath=path)
+            message = ("sftp: No Error during upload. You can find the backup under {0}".format(path))
+            self.set_last_fields(message, path=path)
+            self.message_post(message)
 
     def get_path_and_content(self):
         filename, content = self.get_backup()

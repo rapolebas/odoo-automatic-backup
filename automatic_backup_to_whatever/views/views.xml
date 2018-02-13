@@ -46,6 +46,8 @@
                             <field name="show_owncloud" invisible="1"/>
                             <field name="show_access_key" invisible="1"/>
                             <field name="show_secret_key" invisible="1"/>
+                            <field name="show_login_cred" invisible="1"/>
+                            <field name="show_sftp" invisible="1"/>
                         </group>
                         <group>
                             <field name="schedule_number"/>
@@ -60,9 +62,10 @@
                                     <field name="access_key_id" attrs="{'invisible': [('show_access_key','=',False)]}"/>
                                     <field name="secret_access_key" attrs="{'invisible': [('show_secret_key','=',False)]}"/>
                                     <field name="s3_bucket_name" attrs="{'invisible': [('show_s3','=',False)]}"/>
-                                    <field name="cloud_url" attrs="{'invisible': [('show_owncloud','=',False)]}"/>
-                                    <field name="cloud_username" attrs="{'invisible': [('show_owncloud','=',False)]}"/>
-                                    <field name="cloud_password" attrs="{'invisible': [('show_owncloud','=',False)]}" password="1"/>
+                                    <field name="cloud_url" attrs="{'invisible': [('show_login_cred','=',False)]}"/>
+                                    <field name="cloud_port" attrs="{'invisible': [('show_sftp','=',False)]}"/>
+                                    <field name="cloud_username" attrs="{'invisible': [('show_login_cred','=',False)]}"/>
+                                    <field name="cloud_password" attrs="{'invisible': [('show_login_cred','=',False)]}" password="1"/>
                                 </group>
                             </group>
                         </page>
@@ -139,7 +142,7 @@
           <field name="subject">Succesful Backup: ${object.name}</field>
           <field name="email_to">${object.success_mail.login}</field>
           <field name="lang">${object.success_mail.lang}</field>
-          <field name="model_id" ref="automatic_backup.model_automatic_backup_configuration"/>
+          <field name="model_id" ref="automatic_backup_to_whatever.model_automatic_backup_configuration"/>
           <field name="auto_delete" eval="True"/>
           <field name="body_html">
                 <![CDATA[
@@ -156,7 +159,7 @@
           <field name="subject">Succesful Backup: ${object.name}</field>
           <field name="email_to">${object.success_mail.login}</field>
           <field name="lang">${object.success_mail.lang}</field>
-          <field name="model_id" ref="automatic_backup.model_automatic_backup_configuration"/>
+          <field name="model_id" ref="automatic_backup_to_whatever.model_automatic_backup_configuration"/>
           <field name="auto_delete" eval="True"/>
           <field name="body_html">
                 <![CDATA[

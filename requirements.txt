@@ -1,3 +1,4 @@
 boto3
 dropbox
 pyocclient
+pysftp==0.2.8
