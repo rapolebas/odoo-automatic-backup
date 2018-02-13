@@ -51,7 +51,7 @@ class Configuration(models.Model):
         BackupTypes.s3.value, BackupTypes.dropbox.value,
         BackupTypes.owncloud.value, BackupTypes.sftp.value
     ], required=1)
-    upload_path = fields.Char("Path to upload", required=True)
+    upload_path = fields.Char("Path to upload")
     last_backup = fields.Datetime(readonly=1)
     last_message = fields.Char(readonly=1)
     last_path = fields.Char(readonly=1)
