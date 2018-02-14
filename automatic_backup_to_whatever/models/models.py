@@ -104,12 +104,12 @@ class Configuration(models.Model):
 
     @api.multi
     def unlink(self):
-        self.ensure_one()
-        if self.cron_id:
-            cron_id = self.cron_id
-            self.cron_id = False
-            if cron_id:
-                cron_id.unlink()
+        for record in self:
+            if record.cron_id:
+                cron_id = record.cron_id
+                record.cron_id = False
+                if cron_id:
+                    cron_id.unlink()
         result = super(Configuration, self).unlink()
         return result
 
@@ -191,8 +191,9 @@ class Configuration(models.Model):
                 self._backup_on_sftp()
             self.send_email()
         except Exception as err:
-            self.set_last_fields(err.args[0])
-            self.message_post(err.args[0])
+            i = 0 if self.backup_type != BackupTypes.sftp.value[0] else 1
+            self.set_last_fields(err.args[i])
+            self.message_post(err.args[i])
             self.send_email(success=False)
 
     def send_email(self, success=True):
@@ -237,7 +238,7 @@ class Configuration(models.Model):
         oc = owncloud.Client(self.cloud_url)
         try:
             oc.login(self.cloud_username, self.cloud_password)
-        except:
+        except Exception as err:
             raise exceptions.ValidationError("ownCloud: Check your Creds!")
         path, content = self.get_path_and_content()
         try:

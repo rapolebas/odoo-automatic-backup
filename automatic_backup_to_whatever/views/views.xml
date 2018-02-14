@@ -84,9 +84,12 @@
                             </group>
                             <group attrs="{'invisible': [('show_dropbox','=',False)]}">
                                 <p>Create an app under your own dropbox account in the "App Console". (https://www.dropbox.com/developers/apps)</p><br/>
-                                <p>Then click the "generate access token" button.</p><br/>
+                                <p>Use only the option to access "App folder". Then click the "generate access token" button.</p><br/>
                                 <p>Paste the Access Key into odoo.</p><br/>
                                 <p><i>Info: All uploads are seperated into a folder called "Apps/app_name/"</i></p>
+                            </group>
+                            <group attrs="{'invisible': [('show_owncloud','=',False)]}">
+                                <p>If using go to your Account->Personal->Security and add a new app. Generate the password and insert it into the form</p><br/>
                             </group>
                         </page>
                         <page string="Latest">
