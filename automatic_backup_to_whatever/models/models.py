@@ -23,7 +23,8 @@ class BackupTypes(Enum):
 
 
 class Configuration(models.Model):
-    _name = 'automatic_backup.configuration'
+    _name = 'automatic_backup_to_whatever.configuration'
+    _description = 'Backup Configuration'
     _inherit = ['mail.thread']
 
     name = fields.Char('Name', required=1)
@@ -113,7 +114,7 @@ class Configuration(models.Model):
         return result
 
     def check_upload_path(self, vals):
-        if 'upload_path' in vals:
+        if 'upload_path' in vals and vals['upload_path']:
             vals['upload_path'] = vals['upload_path'].replace('\\', '/')
             vals['upload_path'] = ''.join(
                 vals['upload_path'][i] for i in range(len(vals['upload_path'])-1)
@@ -126,6 +127,8 @@ class Configuration(models.Model):
                     vals['upload_path'] = vals['upload_path'] + '/'
             else:
                 vals['upload_path'] = '/'
+        elif 'upload_path' in vals and not vals['upload_path']:
+            vals['upload_path'] = '/'
         return vals
 
     def set_show_s3(self):

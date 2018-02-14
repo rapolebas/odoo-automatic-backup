@@ -2,7 +2,7 @@
   <data>
       <record id="backup_configuration_view_tree" model="ir.ui.view">
         <field name="name">automatic.backup.configuration.view.tree</field>
-        <field name="model">automatic_backup.configuration</field>
+        <field name="model">automatic_backup_to_whatever.configuration</field>
         <field name="arch" type="xml">
             <tree string="Backup Configuration">
                 <field name="name"/>
@@ -14,7 +14,7 @@
 
       <record id="backup_configuration_view_form" model="ir.ui.view">
         <field name="name">automatic.backup.configuration.view.form</field>
-        <field name="model">automatic_backup.configuration</field>
+        <field name="model">automatic_backup_to_whatever.configuration</field>
         <field name="arch" type="xml">
             <form string="Backup Configuration">
                 <header>
@@ -109,7 +109,7 @@
 
     <record id="backup_configuration_view_search" model="ir.ui.view">
         <field name="name">automatic.backup.configuration.search</field>
-        <field name="model">automatic_backup.configuration</field>
+        <field name="model">automatic_backup_to_whatever.configuration</field>
         <field name="arch" type="xml">
             <search string="Backup Configuration">
                 <field name="active"/>
@@ -123,7 +123,7 @@
 
     <record id="backup_configuration_action" model="ir.actions.act_window">
         <field name="name">Backup Configuration</field>
-        <field name="res_model">automatic_backup.configuration</field>
+        <field name="res_model">automatic_backup_to_whatever.configuration</field>
         <field name="view_type">form</field>
         <field name='view_mode'>tree,form</field>
         <field name="view_id" ref="backup_configuration_view_tree"/>
@@ -142,7 +142,7 @@
           <field name="subject">Succesful Backup: ${object.name}</field>
           <field name="email_to">${object.success_mail.login}</field>
           <field name="lang">${object.success_mail.lang}</field>
-          <field name="model_id" ref="automatic_backup_to_whatever.model_automatic_backup_configuration"/>
+          <field name="model_id" ref="automatic_backup_to_whatever.model_automatic_backup_to_whatever_configuration"/>
           <field name="auto_delete" eval="True"/>
           <field name="body_html">
                 <![CDATA[
@@ -159,7 +159,7 @@
           <field name="subject">Succesful Backup: ${object.name}</field>
           <field name="email_to">${object.success_mail.login}</field>
           <field name="lang">${object.success_mail.lang}</field>
-          <field name="model_id" ref="automatic_backup_to_whatever.model_automatic_backup_configuration"/>
+          <field name="model_id" ref="automatic_backup_to_whatever.model_automatic_backup_to_whatever_configuration"/>
           <field name="auto_delete" eval="True"/>
           <field name="body_html">
                 <![CDATA[
