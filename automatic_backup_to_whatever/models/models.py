@@ -173,7 +173,7 @@ class Configuration(models.Model):
         self.set_show_login_cred()
 
     def action_backup(self, id):
-        backup_ids = self.search([id])
+        backup_ids = self.browse(id)
         for backup in backup_ids:
             backup.btn_action_backup()
 
