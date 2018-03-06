@@ -11,6 +11,10 @@ Supported Cloud-Storages:
  * ownCloud/nextCloud
  * SFTP
  
+Works with:
+ * Odoo 11 Community/Enterprise
+ * Python3.5+
+ 
 Also see: https://apps.odoo.com/apps/modules/11.0/automatic_backup_to_whatever/
 
 Available Languages
