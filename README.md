@@ -31,7 +31,7 @@ Credits
 
 Contributors
 ------------
-
+* `nehemiascr <https://github.com/nehemiascr>`
 
 Sponsors
 --------

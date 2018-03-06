@@ -16,6 +16,10 @@ import datetime
 
 
 class BackupTypes(Enum):
+    """
+    Definition of all Backuptypes
+    """
+
     s3 = ('s3', 'Amazon Web-Service S3')
     dropbox = ('dropbox', 'Dropbox')
     owncloud = ('owncloud', 'ownCloud/nextCloud')
@@ -23,6 +27,10 @@ class BackupTypes(Enum):
 
 
 class Configuration(models.Model):
+    """
+    The Backup Configuration Model
+    """
+
     _name = 'automatic_backup_to_whatever.configuration'
     _description = 'Backup Configuration'
     _inherit = ['mail.thread']
@@ -32,88 +40,112 @@ class Configuration(models.Model):
     state = fields.Selection([('disabled', 'Disabled'),('active', 'Active')],
                              default='disabled', readonly=1)
 
-    schedule_frequently = fields.Selection(string='Every',
-                                           selection=[
-                                               ('days', 'Days'),
-                                               ('weeks', 'Weeks')
-                                           ],
-                                           default='weeks', required=1)
-    schedule_number = fields.Integer('Schedule Number', min=1,
-                                     default=1, required=1)
+    # Automatic Action
+    # Assigned on activation
+    cron_id = fields.Many2one('ir.cron', ondelete='cascade')
 
-    next_backup_time = fields.Datetime('Next Backup Time', store=0, readonly=1,
-                                       compute='_compute_next_backup_time')
+    # Same values as in automatic action
+    # they will be transferred to the automatic-action after write and activation
+    schedule_frequently = fields.Selection(string='Every', selection=[('days', 'Days'), ('weeks', 'Weeks')],
+                                           default='weeks', required=1)
+    schedule_number = fields.Integer('Schedule Number', min=1, default=1, required=1)
+    next_backup_time = fields.Datetime('Next Backup Time', store=0, readonly=1, compute='_compute_next_backup_time')
+
+    # Mail to after backup is executed
     success_mail = fields.Many2one('res.users', ondelete='set null')
     error_mail = fields.Many2one('res.users', ondelete='set null')
 
-    cron_id = fields.Many2one('ir.cron', ondelete='cascade')
-
+    # Changes view of Attributes
     backup_type = fields.Selection([
         BackupTypes.s3.value, BackupTypes.dropbox.value,
         BackupTypes.owncloud.value, BackupTypes.sftp.value
     ], required=1)
+
     upload_path = fields.Char("Path to upload")
+
+    # Just loginfo
     last_backup = fields.Datetime(readonly=1)
     last_message = fields.Char(readonly=1)
     last_path = fields.Char(readonly=1)
 
+    # Variables only needed for view visibility
+    # They are not stored!
     show_s3 = fields.Boolean(compute='set_show_s3', store=0)
     show_dropbox = fields.Boolean(compute='set_show_dropbox', store=0)
     show_owncloud = fields.Boolean(compute='set_show_owncloud', store=0)
     show_sftp = fields.Boolean(compute='set_show_sftp', store=0)
-
     show_access_key = fields.Boolean(compute='set_show_access_key', store=0)
     show_secret_key = fields.Boolean(compute='set_show_secret_key', store=0)
-
     show_login_cred = fields.Boolean(compute='set_show_login_cred', store=0)
 
+    # Required for Dropbox/S3
     access_key_id = fields.Char("Access Key")
+    # Required for S3
     secret_access_key = fields.Char("Secret Key")
     s3_bucket_name = fields.Char("BucketName")
 
+    # Required for owncloud/nextcloud/sftp
     cloud_url = fields.Char('URL')
+    # Required for sftp
     cloud_port = fields.Char('Port')
+    # Required for owncloud/nextcloud/sftp
     cloud_username = fields.Char('Username')
     cloud_password = fields.Char('Password')
 
     @api.model
     def create(self, vals):
+        """
+        Inherited create-method...
+        ...to check and change upload-path
+        """
         vals = self.check_upload_path(vals)
         result = super(Configuration, self).create(vals)
         return result
 
     @api.multi
     def write(self, vals):
+        """
+        Inherited write-method...
+        ...to check and change upload-path
+        ...to override attributes to automatic action
+        """
         self.ensure_one()
         vals = self.check_upload_path(vals)
         result = super(Configuration, self).write(vals)
-        try:
-            if self.cron_id:
-                if 'interval_number' in vals:
-                    self.cron_id.write({'interval_number': self.schedule_number,})
-                if 'interval_type' in vals:
-                    self.cron_id.write({'interval_type': self.schedule_frequently,})
-                if 'active' in vals:
-                    self.cron_id.write({'active': self.active})
-                if 'name' in vals:
-                    self.cron_id.write({'name': 'Backup: '+self.name})
-        except:
-            # only if cron is busy
-            pass
+        if self.cron_id:
+            if 'name' in vals:
+                self.cron_id.write({'name': 'Backup: '+self.name})
+            if 'active' in vals:
+                self.cron_id.write({'active': self.active})
+            if 'interval_number' in vals:
+                self.cron_id.write({'interval_number': self.schedule_number})
+            if 'interval_type' in vals:
+                self.cron_id.write({'interval_type': self.schedule_frequently})
         return result
 
     @api.multi
     def unlink(self):
+        """
+            Inherited unlink-method...
+            ...to remove automatic action before delete
+        """
+
+        """
         for record in self:
             if record.cron_id:
                 cron_id = record.cron_id
                 record.cron_id = False
                 if cron_id:
-                    cron_id.unlink()
+                    cron_id.unlink()"""
         result = super(Configuration, self).unlink()
         return result
 
     def check_upload_path(self, vals):
+        """
+
+        :param vals:
+        :return: vals with correct path
+        """
         if 'upload_path' in vals and vals['upload_path']:
             vals['upload_path'] = vals['upload_path'].replace('\\', '/')
             vals['upload_path'] = ''.join(
