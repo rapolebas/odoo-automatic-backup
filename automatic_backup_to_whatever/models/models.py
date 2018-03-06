@@ -8,8 +8,9 @@ import botocore
 import pysftp
 import dropbox
 from dropbox import exceptions as dropbox_exceptions
-
+from requests import exceptions as requests_exceptions
 import owncloud
+from paramiko.ssh_exception import SSHException
 
 import os
 import datetime
@@ -65,7 +66,7 @@ class Configuration(models.Model):
 
     # Just loginfo
     last_backup = fields.Datetime(readonly=1)
-    last_message = fields.Char(readonly=1)
+    last_message = fields.Html(readonly=1)
     last_path = fields.Char(readonly=1)
 
     # Variables only needed for view visibility
@@ -129,27 +130,30 @@ class Configuration(models.Model):
             Inherited unlink-method...
             ...to remove automatic action before delete
         """
-
-        """
         for record in self:
             if record.cron_id:
                 cron_id = record.cron_id
                 record.cron_id = False
                 if cron_id:
-                    cron_id.unlink()"""
+                    cron_id.unlink()
         result = super(Configuration, self).unlink()
         return result
 
     def check_upload_path(self, vals):
         """
-
-        :param vals:
-        :return: vals with correct path
+            Changes Upload path to standardize path
+            :param vals:
+            :return: vals with correct upload_path
         """
+        # Minimum path is 1 char
         if 'upload_path' in vals and vals['upload_path']:
+            # removes backslashes
+            # adds first slash
+            # adds last slash
+            # removes dopple slashes
             vals['upload_path'] = vals['upload_path'].replace('\\', '/')
             vals['upload_path'] = ''.join(
-                vals['upload_path'][i] for i in range(len(vals['upload_path'])-1)
+                vals['upload_path'][i] for i in range(len(vals['upload_path']))
                 if (i != 0 and vals['upload_path'][i-1] != vals['upload_path'][i]) or vals['upload_path'][i] != '/' or (vals['upload_path'][i] == '/' and i == 0)
             )
             if len(vals['upload_path']):
@@ -159,9 +163,12 @@ class Configuration(models.Model):
                     vals['upload_path'] = vals['upload_path'] + '/'
             else:
                 vals['upload_path'] = '/'
+        # adds root-slash
         elif 'upload_path' in vals and not vals['upload_path']:
             vals['upload_path'] = '/'
         return vals
+
+    # Start only needed for view
 
     def set_show_s3(self):
         self.show_s3 = (self.backup_type == BackupTypes.s3.value[0])
@@ -190,133 +197,24 @@ class Configuration(models.Model):
             or (self.backup_type == BackupTypes.sftp.value[0])
         )
 
-    def _compute_next_backup_time(self):
-        if self.cron_id:
-            self.next_backup_time = self.cron_id.nextcall
-
     @api.onchange('backup_type')
     def onchange_backup_type(self):
         self.set_show_s3()
-        self.set_show_access_key()
-        self.set_show_secret_key()
+        self.set_show_sftp()
         self.set_show_owncloud()
         self.set_show_dropbox()
-        self.set_show_sftp()
+
+        self.set_show_access_key()
+        self.set_show_secret_key()
         self.set_show_login_cred()
 
-    def action_backup(self, id):
-        backup_ids = self.browse(id)
-        for backup in backup_ids:
-            backup.btn_action_backup()
-
-    @api.multi
-    def btn_action_backup(self):
-        self.ensure_one()
-        try:
-            if self.backup_type == BackupTypes.s3.value[0]:
-                self._backup_on_s3()
-            elif self.backup_type == BackupTypes.dropbox.value[0]:
-                self._backup_on_dropbox()
-            elif self.backup_type == BackupTypes.owncloud.value[0]:
-                self._backup_on_owncloud()
-            elif self.backup_type == BackupTypes.sftp.value[0]:
-                self._backup_on_sftp()
-            self.send_email()
-        except Exception as err:
-            i = 0 if self.backup_type != BackupTypes.sftp.value[0] else 1
-            self.set_last_fields(err.args[i])
-            self.message_post(err.args[i])
-            self.send_email(success=False)
-
-    def send_email(self, success=True):
-        if ((success and self.success_mail.id is not False) or (not success and self.error_mail.id is not False)):
-            template_name = 'backup_configuration_success_template' if success else 'backup_configuration_error_template'
-            template = self.env.ref('automatic_backup_to_whatever.'+template_name)
-            self.env['mail.template'].browse(template.id).send_mail(self.id, force_send=True)
-
-    def _backup_on_s3(self):
-        if self.access_key_id is False or self.secret_access_key is False:
-            raise exceptions.MissingError("AWS S3: You need to add a AccessKey and a SecretAccessKey!")
-        if self.s3_bucket_name is False:
-            raise exceptions.MissingError("AWS S3: You need to add a BucketName!")
-
-        client = boto3.client('s3', aws_access_key_id=self.access_key_id, aws_secret_access_key=self.secret_access_key)
-        path, content = self.get_path_and_content()
-
-        try:
-            client.put_object(Bucket=self.s3_bucket_name, Body=content, Key=path)
-        except botocore.exceptions.ClientError as client_err:
-            raise exceptions.ValidationError(
-                "AWS S3: " + client_err.response['Error']['Message'])
-        else:
-            message = ("AWS S3: No Error during upload. You can find the backup under the bucket {0} with the "
-                      "name {1}".format(self.s3_bucket_name, path))
-            self.set_last_fields(message, path=path)
-            self.message_post(message)
-
-    def _backup_on_dropbox(self):
-        dbx = dropbox.Dropbox(self.access_key_id)
-        path, content = self.get_path_and_content()
-        try:
-            dbx.files_upload(content.read(), path)
-        except dropbox_exceptions.AuthError:
-            raise exceptions.ValidationError("Dropbox: Wrong Access Key!")
-        else:
-            message = ("Dropbox: No Error during upload. You can find the backup under the name {0}".format(path))
-            self.set_last_fields(message, path=path)
-            self.message_post(message)
-
-    def _backup_on_owncloud(self):
-        oc = owncloud.Client(self.cloud_url)
-        try:
-            oc.login(self.cloud_username, self.cloud_password)
-        except Exception as err:
-            raise exceptions.ValidationError("ownCloud: Check your Creds!")
-        path, content = self.get_path_and_content()
-        try:
-            oc.put_file_contents(path, content.read())
-        except Exception as err:
-            if err.status_code == 404:
-                raise exceptions.ValidationError("Folder not found!")
-            raise err
-        message = ("ownCloud: No Error during upload. You can find the backup under {0}".format(path))
-        self.set_last_fields(message, path=path)
-        self.message_post(message)
-
-    def _backup_on_sftp(self):
-        try:
-            port = int(self.cloud_port)
-        except:
-            raise exceptions.ValidationError("Port has to be between 1 and 65535")
-        else:
-            with pysftp.Connection(host=self.cloud_url,
-                                    username=self.cloud_username,
-                                    password=self.cloud_password,
-                                    port=port) as sftp:
-                path, content = self.get_path_and_content()
-                sftp.putfo(content, remotepath=path)
-            message = ("sftp: No Error during upload. You can find the backup under {0}".format(path))
-            self.set_last_fields(message, path=path)
-            self.message_post(message)
-
-    def get_path_and_content(self):
-        filename, content = self.get_backup()
-        path = os.path.join(self.upload_path, filename)
-        return path, content
-
-    def get_backup(self, dbname=None, backup_format='zip'):
-        if dbname is None:
-            dbname = self._cr.dbname
-        ts = datetime.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = "%s_%s.%s" % (dbname, ts, backup_format)
-        dump_stream = service.db.dump_db(dbname, None, backup_format)
-        return filename, dump_stream
-
-    def set_last_fields(self, message, path=None):
-        if path is not None:
-            self.last_path = path
-            self.last_backup = datetime.datetime.now()
-        self.last_message = message
+    def _compute_next_backup_time(self):
+        """
+        Sets the next backup time if automatic action exists and model is active
+        """
+        if self.cron_id and self.active:
+            # Backup time from Automatic Action, so the method don´t need to calculate by itself
+            self.next_backup_time = self.cron_id.nextcall
 
     def deactivate_progressbar(self):
         self.active = False
@@ -325,23 +223,191 @@ class Configuration(models.Model):
     def activate_progressbar(self):
         self.active = True
         self.state = 'active'
-
         if not self.cron_id:
-            nextbackuptime = self.next_backup_time
-            if not nextbackuptime:
-                nextbackuptime = datetime.datetime.today() + datetime.timedelta(days=1)
-            model_id = self.env['ir.model'].search([('model', '=', self._name)])
-            cron_id = self.env['ir.cron'].create({
-                'name': 'Backup: ' + self.name,
-                'model_id': model_id.id,
-                'state': 'code',
-                'user_id': 1,
-                'interval_number': self.schedule_number,
-                'interval_type': self.schedule_frequently,
-                'nextcall': nextbackuptime,
-                'priority': 100,
-                'numbercall': -1,
-                'active': self.active,
-                'code': 'model.action_backup('+str(self.id)+')'
-            })
-            self.cron_id = cron_id.id
+            self.create_cron()
+
+    def set_last_fields(self, message, path=None):
+        if path is not None:
+            self.last_path = path
+            self.last_backup = datetime.datetime.now()
+        self.last_message = message
+
+    # End only needed for view
+
+    def create_cron(self):
+        """
+        Creates automatic action
+        """
+        next_backup_time = self.next_backup_time
+        if not next_backup_time:
+            next_backup_time = datetime.datetime.today() + datetime.timedelta(days=1)
+        model_id = self.env['ir.model'].search([('model', '=', self._name)])
+        cron_id = self.env['ir.cron'].create({
+            'name': 'Backup: ' + self.name,
+            'model_id': model_id.id,
+            'state': 'code',
+            'user_id': 1,
+            'interval_number': self.schedule_number,
+            'interval_type': self.schedule_frequently,
+            'nextcall': next_backup_time,
+            'priority': 100,
+            'numbercall': -1,
+            'active': self.active,
+            'code': 'model.action_backup(' + str(self.id) + ')'
+        })
+        self.cron_id = cron_id.id
+
+    def send_email(self, success=True):
+        """
+        Sends Mail to success_mail or error_mail
+        :param success: bool
+        """
+        if ((success and self.success_mail.id is not False) or (not success and self.error_mail.id is not False)):
+            template_name = 'backup_configuration_success_mail' if success else 'backup_configuration_error_mail'
+            template = self.env.ref('automatic_backup_to_whatever.'+template_name)
+            self.env['mail.template'].browse(template.id).send_mail(self.id, force_send=True)
+
+    def action_backup(self, id):
+        """
+        Executes Backup by backup_model id
+        if ID not found throws exception
+        :param id: number
+        """
+        backup_ids = self.browse(id)
+        for backup in backup_ids:
+            backup.btn_action_backup()
+
+    @api.multi
+    def btn_action_backup(self):
+        """
+        Action to execute Backup
+        """
+        self.ensure_one()
+        try:
+            # Check typ of backup
+            if self.backup_type == BackupTypes.s3.value[0]:
+                self._backup_on_s3()
+            elif self.backup_type == BackupTypes.dropbox.value[0]:
+                self._backup_on_dropbox()
+            elif self.backup_type == BackupTypes.owncloud.value[0]:
+                self._backup_on_owncloud()
+            elif self.backup_type == BackupTypes.sftp.value[0]:
+                self._backup_on_sftp()
+            # Add here another "if condition" when you would like to implement another backup type
+            self.send_email()
+        except requests_exceptions.ConnectionError:
+            message = 'odoo Server has no connection to this service-provider!'
+            self.set_last_fields(message)
+            self.message_post(message)
+            self.send_email(success=False)
+        except exceptions.ValidationError  as err:
+            self.set_last_fields(err.args[0])
+            self.message_post(err.args[0])
+            self.send_email(success=False)
+
+    def _backup_on_s3(self):
+        """
+        Upload to S3
+        """
+        if self.access_key_id is False or self.secret_access_key is False:
+            raise exceptions.MissingError("AWS S3: You need to add a AccessKey and a SecretAccessKey!")
+        if self.s3_bucket_name is False:
+            raise exceptions.MissingError("AWS S3: You need to add a BucketName!")
+
+        client = boto3.client('s3', aws_access_key_id=self.access_key_id, aws_secret_access_key=self.secret_access_key)
+        path, content = self.get_path_and_content()
+        try:
+            client.put_object(Bucket=self.s3_bucket_name, Body=content, Key=path)
+        except botocore.exceptions.ClientError as client_err:
+            raise exceptions.ValidationError("AWS S3: " + client_err.response['Error']['Message'])
+        else:
+            message = ("<p><b>AWS S3:</b> Upload successful!</p><p>You can find the backup under the bucket {0} with the path <b>{1}</b></p>".format(self.s3_bucket_name, path))
+            self.set_last_fields(message, path=path)
+            self.message_post(message)
+
+    def _backup_on_dropbox(self):
+        """
+        Upload to Dropbox
+        """
+        dbx = dropbox.Dropbox(self.access_key_id)
+        path, content = self.get_path_and_content()
+        try:
+            dbx.files_upload(content.read(), path)
+        except dropbox_exceptions.AuthError:
+            raise exceptions.ValidationError("Dropbox: Access Key not valid!")
+        except dropbox_exceptions.BadInputError:
+            raise exceptions.ValidationError("Dropbox: Access Key is malformed!")
+        else:
+            message = ("<p><b>Dropbox:</b> Upload successful!</p><p>You can find the backup under the name <b>{0}</b></p>".format(path))
+            self.set_last_fields(message, path=path)
+            self.message_post(message)
+
+    def _backup_on_owncloud(self):
+        """
+        Upload to owncloud/nextcloud
+        :return:
+        """
+        oc = owncloud.Client(self.cloud_url)
+        oc.login(self.cloud_username, self.cloud_password)
+        path, content = self.get_path_and_content()
+        try:
+            oc.put_file_contents(path, content.read())
+        except owncloud.HTTPResponseError as http_error:
+            if http_error.status_code == 401:
+                raise exceptions.ValidationError('ownCloud/nextCloud: Wrong Username or Password!')
+            if http_error.status_code == 404:
+                raise exceptions.ValidationError('ownCloud/nextCloud: Folder not found!')
+            raise http_error
+        message = ("<p><b>ownCloud/nextCloud:</b> Upload successful!</p><p>You can find the backup under the name <b>{0}</b></p>".format(path))
+        self.set_last_fields(message, path=path)
+        self.message_post(message)
+
+    def _backup_on_sftp(self):
+        """
+        Upload to SFTP
+        :return:
+        """
+        try:
+            port = int(self.cloud_port)
+        except:
+            raise exceptions.ValidationError("Port has to be between 1 and 65535")
+        else:
+            try:
+                with pysftp.Connection(host=self.cloud_url, username=self.cloud_username,
+                                        password=self.cloud_password, port=port) as sftp:
+                    path, content = self.get_path_and_content()
+                    sftp.putfo(content, remotepath=path)
+            except SSHException as ssh_err:
+                raise exceptions.ValidationError('SFTP: ' + ssh_err.args[0])
+            except PermissionError:
+                raise exceptions.ValidationError('SFTP: Access denied! No permissions to upload file.')
+            except FileNotFoundError:
+                raise exceptions.ValidationError('SFTP: Folder not found.')
+            else:
+                message = ("<p><b>SFTP:</b> Upload successful!</p><p>You can find the backup under the name <b>{0}</b></p>".format(path))
+                self.set_last_fields(message, path=path)
+                self.message_post(message)
+
+    def get_path_and_content(self):
+        """
+        Get the Path with Filename and the DB-backup-content
+        :return: tuple(path: string, content: binary)
+        """
+        filename, content = self.get_backup()
+        path = os.path.join(self.upload_path, filename)
+        return path, content
+
+    def get_backup(self, dbname=None, backup_format='zip'):
+        """
+        Get backup with content
+        :param dbname: string
+        :param backup_format: string
+        :return: tuple(filename: string, dump_data: binary)
+        """
+        if dbname is None:
+            dbname = self._cr.dbname
+        ts = datetime.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = "%s_%s.%s" % (dbname, ts, backup_format)
+        dump_stream = service.db.dump_db(dbname, None, backup_format)
+        return filename, dump_stream
+
