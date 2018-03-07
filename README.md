@@ -10,6 +10,7 @@ Supported Cloud-Storages:
  * Dropbox
  * ownCloud/nextCloud
  * SFTP
+ * Backblaze B2 Cloud Storage
  
 Works with:
  * Odoo 11 Community/Enterprise
